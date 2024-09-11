@@ -7,43 +7,65 @@ var setVar = player.SetVar;
 var getVar = player.GetVar;
 window.Script1 = function()
 {
-  // In this function scope you have access to the following:
-// var player = GetPlayer();
-// var object = player.object;
-// var addToTimeline = player.addToTimeline;
-// var setVar = player.SetVar;
-// var getVar = player.GetVar;
-
-function loadScripts(scriptUrls) {
-  const promises = scriptUrls.map(url => {
-      return new Promise((resolve, reject) => {
-          const script = document.createElement('script');
-          script.src = url;
-          script.onload = () => resolve(url); // Resolve the promise when the script loads
-          script.onerror = () => reject(new Error(`Failed to load script ${url}`)); // Reject the promise if there's an error
-          document.head.appendChild(script); // or document.body.appendChild(script)
-      });
+  function loadScript(url) {
+  return new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = url;
+    script.onload = () => resolve(url); // Resolve when the script loads
+    script.onerror = () => reject(new Error(`Failed to load script ${url}`)); // Reject if there's an error
+    document.head.appendChild(script);
   });
-
-  return Promise.all(promises); // Return a single promise that resolves when all scripts are loaded
 }
 
-// Example usage
-loadScripts([
-  "https://cdn.babylonjs.com/babylon.js",
-  // Add more script URLs if needed
-]).then(() => {
-  console.log('All scripts loaded successfully');
+async function loadScriptsSequentially(scriptUrls) {
+  for (const url of scriptUrls) {
+    await loadScript(url); // Load each script sequentially
+  }
+}
 
-  // Call the function to create the scene
-  createScene();
-}).catch(error => {
-  console.error('Error loading scripts:', error);
-});
+const scriptUrls = [
+  "https://cdn.babylonjs.com/babylon.js", // Load Babylon.js first
+  // "https://cdn.babylonjs.com/loaders/babylonjs.loaders.min.js", // Load loaders after Babylon.js
+  "https://cdn.babylonjs.com/loaders/babylon.glTF2FileLoader.js" // Load glTF loader last
+];
 
-function createScene() {
-  console.log("creating Scene")
+loadScriptsSequentially(scriptUrls)
+  .then(() => {
+    console.log('All scripts loaded successfully');
+    myScene.createScene(); // Proceed to create the scene
+  })
+  .catch(error => {
+    console.error('Error loading scripts:', error);
+  });
 
+// function loadAssets(assetUrls) {
+//   // Create an array of promises for each asset URL
+//   const promises = assetUrls.map(url => {
+//     return new Promise((resolve, reject) => {
+//       // Fetch the asset using the Fetch API
+//       fetch(url)
+//         .then(response => {
+//           if (!response.ok) {
+//             throw new Error(`Failed to load asset ${url}: ${response.statusText}`);
+//           }
+//           return response.arrayBuffer(); // Assuming you're fetching binary data like a model
+//         })
+//         .then(data => {
+//           // Resolve the promise with the fetched data
+//           resolve({ url, data });
+//         })
+//         .catch(error => {
+//           // Reject the promise in case of error
+//           reject(error);
+//         });
+//     });
+//   });
+
+//   // Return a single promise that resolves when all assets are loaded
+//   return Promise.all(promises);
+// }
+
+function prepareCanvasElement() {
   const iframe = document.querySelector('iframe');
   let canvas
   if (iframe) {
@@ -57,42 +79,53 @@ function createScene() {
     canvas = document.getElementById('renderCanvas')
   }
 
-
-  // Create a Babylon.js engine
-  const engine = new BABYLON.Engine(canvas, true);
-  
-  // Create a basic scene
-  const scene = new BABYLON.Scene(engine);
-  
-  // Create a camera
-  const camera = new BABYLON.ArcRotateCamera("camera", Math.PI / 2, Math.PI / 4, 10, BABYLON.Vector3.Zero(), scene);
-  camera.attachControl(canvas, true);
-  
-  // Create a light
-  const light = new BABYLON.HemisphericLight("light", new BABYLON.Vector3(0, 1, 0), scene);
-  
-  // Create a basic box
-  const box = BABYLON.MeshBuilder.CreateBox("box", {}, scene);
-  
-  // Set a simple material
-  const material = new BABYLON.StandardMaterial("boxMaterial", scene);
-  material.diffuseColor = new BABYLON.Color3(1, 0, 0); // Red color
-  box.material = material;
-  
-  // Animation loop
-  engine.runRenderLoop(() => {
-      box.rotation.y += 0.01; // Rotate the box
-      scene.render();
-  });
-  
-  // Handle window resize
-  window.addEventListener('resize', () => {
-      engine.resize();
-  });
-  
-  console.log("handle done loading")
-  player.SetVar("loadingVideoState","hidden");
+  console.log("Canvas element ready:", canvas)
+  return canvas
 }
+
+const myScene = {
+  engine: null,
+  scene: null,
+  assetUrl: "https://assetsblobstoragepublic.blob.core.windows.net/asset-blob/earth/scene.gltf",
+  canvasElement: prepareCanvasElement(),
+  async createScene() {
+    console.log("Creating Scene with this asset:", this.assetUrl)
+    const engine = new BABYLON.Engine(this.canvasElement, true);
+    const scene = new BABYLON.Scene(engine);
+    this.engine = engine
+    this.scene = await BABYLON.appendSceneAsync(this.assetUrl, scene);
+
+    // Create a camera
+    const camera = new BABYLON.ArcRotateCamera("camera", Math.PI / 2, Math.PI / 4, 10, BABYLON.Vector3.Zero(), scene);
+    camera.attachControl(this.canvasElement, true);
+
+    // This creates a light, aiming 0,1,0 - to the sky (non-mesh)
+    var light = new BABYLON.HemisphericLight("light1", new BABYLON.Vector3(0, 1, 0), scene);
+
+    // UNCOMMENT TO ENABLE DEBUGGER
+    // scene.debugLayer.show();
+
+    // can you just extend the toframe of the animation to match the sctill pos
+    engine.runRenderLoop(function () {
+      scene.render();
+    });
+
+    window.addEventListener("resize", function () {
+      engine.resize();
+    });
+
+    
+    return new Promise((resolve, reject) => {
+      console.log("handle done loading")
+      player.SetVar("loadingVideoState","hidden");
+      resolve()
+    });
+  },
+};
+
+// (async () => {
+//   await myScene.createScene(); // this scene must be available before doing anything with the scene
+// })();
 }
 
 };
